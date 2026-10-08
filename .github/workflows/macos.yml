@@ -1,0 +1,29 @@
+name: macOS build and storage tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Test durable storage and annotations
+        run: swift test
+      - name: Build application bundle
+        run: bash scripts/build-app.sh
+      - name: Package development build
+        run: ditto -c -k --sequesterRsrc --keepParent dist/Still.app dist/Still-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Still-macOS-development
+          path: dist/Still-macOS.zip
