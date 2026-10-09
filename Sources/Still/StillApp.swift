@@ -33,7 +33,7 @@ struct StillApp: App {
             }
         }
 
-        MenuBarExtra("Still", systemImage: "heart") {
+        MenuBarExtra("Still", systemImage: "bookmark.fill") {
             MenuBarView().environmentObject(model)
         }
         .menuBarExtraStyle(.window)

@@ -259,7 +259,7 @@ struct LibraryView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "flag.fill").foregroundStyle(Brand.lavender).font(.system(size: 38, weight: .ultraLight)).foregroundStyle(.secondary)
+            BookmarkMark().fill(Brand.lavender).frame(width: 28, height: 38)
             Text(model.items.isEmpty ? "A place for things worth keeping." : "Return to something useful.")
                 .font(.system(size: 22, weight: .regular, design: .serif))
             Text(model.items.isEmpty ? "Paste a link or a passage. Your library stays on this Mac." : "Choose an item from your library.")

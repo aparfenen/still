@@ -19,26 +19,15 @@ func drawIcon(pixels: Int, path: URL) throws {
     NSColor(red: 0.965, green: 0.953, blue: 0.985, alpha: 1).setFill()
     NSBezierPath(roundedRect: NSRect(x: 40, y: 40, width: 944, height: 944),
                  xRadius: 210, yRadius: 210).fill()
-    let flag = NSBezierPath()
-    flag.move(to: NSPoint(x: 354, y: 730))
-    flag.curve(to: NSPoint(x: 712, y: 704), controlPoint1: NSPoint(x: 478, y: 810),
-               controlPoint2: NSPoint(x: 584, y: 638))
-    flag.line(to: NSPoint(x: 712, y: 474))
-    flag.curve(to: NSPoint(x: 354, y: 500), controlPoint1: NSPoint(x: 584, y: 408),
-               controlPoint2: NSPoint(x: 478, y: 580))
-    flag.close()
+    let bookmark = NSBezierPath()
+    bookmark.move(to: NSPoint(x: 332, y: 752))
+    bookmark.line(to: NSPoint(x: 692, y: 752))
+    bookmark.line(to: NSPoint(x: 692, y: 272))
+    bookmark.line(to: NSPoint(x: 512, y: 432))
+    bookmark.line(to: NSPoint(x: 332, y: 272))
+    bookmark.close()
     NSColor(red: 0.69, green: 0.59, blue: 0.86, alpha: 1).setFill()
-    flag.fill()
-    NSColor(red: 0.24, green: 0.21, blue: 0.30, alpha: 1).setStroke()
-    flag.lineWidth = 18
-    flag.lineJoinStyle = .round
-    flag.stroke()
-    let pole = NSBezierPath()
-    pole.move(to: NSPoint(x: 354, y: 748))
-    pole.line(to: NSPoint(x: 354, y: 282))
-    pole.lineWidth = 26
-    pole.lineCapStyle = .round
-    pole.stroke()
+    bookmark.fill()
     NSGraphicsContext.restoreGraphicsState()
     guard let png = bitmap.representation(using: .png, properties: [:]) else { fatalError("Cannot encode icon.") }
     try png.write(to: path)
