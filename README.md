@@ -48,7 +48,55 @@ Check the actual run status; a workflow file alone does not prove the checks pas
 7. Opt into **automatic capture** through the menu bar or Capture preferences.
    It starts paused by default and never imports the old clipboard on activation.
 
-## Interface and organization\n\n- Lavender filled flag beside **still**, with a matching Dock/Finder icon.\n- **Settings → Reading**: system/serif/rounded/monospaced font, size, spacing, margins, and light/dark/system appearance.\n- Create, rename, or delete folders through the sidebar **+**. Deleting a folder keeps its items.\n- **Organize…** in the reader or item context menu assigns one folder, one category, and multiple tags.\n- Folder, tag, and category sidebar filters; tags/categories also participate in search.\n- Export the whole library or one item as JSON, Markdown, CSV, TXT, or HTML. Exports include comments.\n- JSON is the restore format, including empty folders. Other formats are readable exports, not backups.\n- Older libraries and version-1 JSON archives migrate without resetting saved content.\n\n## Included
+## How long are items stored?
+
+| Item | Retention |
+|---|---|
+| Manually pasted and saved items | Until you delete them |
+| Automatic clipboard captures | **7 days by default**, measured from the latest copy of the same content |
+| Kept, highlighted, commented, or organized items | No automatic expiry |
+
+Change temporary retention in **Settings → Capture** to **1, 7, or 30 days**.
+Assigning a folder, tag, or category keeps an item from expiring.
+Shortening retention removes temporary items that are already past the new limit.
+Expired items are removed at launch, about hourly while Still runs, and when
+retention changes. Still does not remove expired items while it is closed.
+
+## Choosing an export format
+
+Use **Export library** in the sidebar for everything, or **Export** in the reader
+for one item.
+
+| Purpose | Recommended format |
+|---|---|
+| A complete backup you can restore into Still | **JSON backup** |
+| Writing, reusable notes, or moving content to another notes app | **Markdown** |
+| Browsing or analyzing items in a spreadsheet | **CSV** |
+| A readable document to open in a browser | **HTML** |
+| Simple text you can open almost anywhere | **Plain text (TXT)** |
+
+**Recommended routine:** save a JSON backup regularly; use Markdown when taking
+notes elsewhere. JSON preserves saved content, annotations and timestamps,
+organization, and folders (including empty folders). Only JSON can be imported
+back into Still; the other formats are readable exports.
+
+All exports include saved text, highlights, and comments. Keep private backups
+somewhere you trust. Import through **Settings → Capture → Import backup…** or
+**Library → Import Library…**. Imports merge new items; existing items with the
+same ID or original content are preserved rather than overwritten.
+
+## Interface and organization
+
+- Lavender bookmark-shaped flag beside **still**, with a matching Dock/Finder icon.
+- **Settings → Reading**: system/serif/rounded/monospaced font, size, spacing, margins, and light/dark/system appearance.
+- Create, rename, or delete folders through the sidebar **+**. Deleting a folder keeps its items.
+- **Organize…** in the reader or item context menu assigns one folder, one category, and multiple tags.
+- Folder, tag, and category sidebar filters; tags/categories also participate in search.
+- Export the whole library or one item as JSON, Markdown, CSV, TXT, or HTML. Exports include comments.
+- JSON is the restore format, including empty folders. Other formats are readable exports, not backups.
+- Older libraries and version-1 JSON archives migrate without resetting saved content.
+
+## Included
 
 - Native SwiftUI app, menu bar controls, keyboard-friendly manual capture.
 - Optional plain-text/link clipboard polling, exclusions and sensitive markers.
