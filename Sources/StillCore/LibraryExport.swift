@@ -25,47 +25,33 @@ public enum LibraryExport {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             return try encoder.encode(LibraryArchive(items: items, folders: folders))
         }
-        func folder(_ item: LibraryItem) -> String { folders.first { $0.id == item.folderID }?.name ?? "" }
-        func stamp(_ date: Date) -> String { ISO8601DateFormatter().string(from: date) }
         let output: String
         switch format {
-        case .json: fatalError("Handled above")
+        case .json:
+            throw StoreError(message: "Use JSON backup export.")
         case .csv:
-            let header = ["Title", "Original", "Reader text", "Folder", "Category", "Tags", "Status", "Created", "Comments"]
-            let rows = items.map { item in
-                [item.title, item.original, item.readingText, folder(item), item.category ?? "",
-                 (item.tags ?? []).joined(separator: ", "), item.status.rawValue, stamp(item.createdAt),
-                 item.annotations.map { $0.quote + " — " + $0.comment + " [" + stamp($0.modifiedAt) + "]" }.joined(separator: "\n")]
-            }
-            output = ([header] + rows).map { $0.map(csvField).joined(separator: ",") }.joined(separator: "\r\n")
-        case .markdown, .text:
-            let markdown = format == .markdown
-            output = items.map { item in
-                var blocks = [(markdown ? "# " : "") + item.title,
-                    "Saved: " + stamp(item.createdAt),
-                    "Folder: " + folder(item) + " · Category: " + (item.category ?? ""),
-                    "Tags: " + (item.tags ?? []).joined(separator: ", "),
-                    "Original: " + item.original,
-                    item.articleText ?? ""]
-                for note in item.annotations {
-                    blocks.append((markdown ? "> " : "Highlight: ") + note.quote)
-                    blocks.append(note.comment)
-                    blocks.append("Created: " + stamp(note.createdAt) + " · Edited: " + stamp(note.modifiedAt))
+            var rows: [[String]] = [
+                ["Title", "Original", "Reader text", "Folder", "Category", "Tags", "Status", "Created", "Comments"]
+            ]
+            for item in items {
+                var row: [String] = [item.title, item.original, item.readingText]
+                row.append(folderName(item, folders: folders))
+                row.append(item.category ?? "")
+                row.append((item.tags ?? []).joined(separator: ", "))
+                row.append(item.status.rawValue)
+                row.append(stamp(item.createdAt))
+                let comments = item.annotations.map { note -> String in
+                    [note.quote, note.comment, "[" + stamp(note.modifiedAt) + "]"].joined(separator: " — ")
                 }
-                return blocks.filter { !$0.isEmpty }.joined(separator: "\n\n")
-            }.joined(separator: "\n\n---\n\n")
+                row.append(comments.joined(separator: "\n"))
+                rows.append(row)
+            }
+            output = rows.map { $0.map(csvField).joined(separator: ",") }.joined(separator: "\r\n")
+        case .markdown, .text:
+            output = items.map { textSection($0, folders: folders, markdown: format == .markdown) }
+                .joined(separator: "\n\n---\n\n")
         case .html:
-            let sections = items.map { item in
-                let notes = item.annotations.map {
-                    "<blockquote>" + html($0.quote) + "</blockquote><p>" + html($0.comment)
-                    + "</p><small>Created " + stamp($0.createdAt) + " · Edited " + stamp($0.modifiedAt) + "</small>"
-                }.joined()
-                return "<article><h1>" + html(item.title) + "</h1><p>"
-                    + html(folder(item) + " · " + (item.category ?? "") + " · " + (item.tags ?? []).joined(separator: ", "))
-                    + "</p><small>Saved " + stamp(item.createdAt) + "</small><h2>Original</h2><pre>"
-                    + html(item.original) + "</pre><h2>Reading text</h2><pre>" + html(item.readingText)
-                    + "</pre>" + notes + "</article>"
-            }.joined()
+            let sections = items.map { htmlSection($0, folders: folders) }.joined()
             output = """
             <!doctype html><html lang="en"><meta charset="utf-8"><title>Still library</title>
             <style>body{font:16px/1.65 system-ui;max-width:760px;margin:40px auto;padding:20px;color:#29272d}
@@ -76,6 +62,43 @@ public enum LibraryExport {
         }
         return Data(output.utf8)
     }
+
+    private static func textSection(_ item: LibraryItem, folders: [LibraryFolder], markdown: Bool) -> String {
+        var blocks: [String] = []
+        blocks.append((markdown ? "# " : "") + item.title)
+        blocks.append("Saved: " + stamp(item.createdAt))
+        blocks.append("Folder: " + folderName(item, folders: folders))
+        blocks.append("Category: " + (item.category ?? ""))
+        blocks.append("Tags: " + (item.tags ?? []).joined(separator: ", "))
+        blocks.append("Original: " + item.original)
+        if let article = item.articleText { blocks.append(article) }
+        for note in item.annotations {
+            blocks.append((markdown ? "> " : "Highlight: ") + note.quote)
+            blocks.append(note.comment)
+            blocks.append("Created: " + stamp(note.createdAt))
+            blocks.append("Edited: " + stamp(note.modifiedAt))
+        }
+        return blocks.filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    private static func htmlSection(_ item: LibraryItem, folders: [LibraryFolder]) -> String {
+        let labels = [folderName(item, folders: folders), item.category ?? "", (item.tags ?? []).joined(separator: ", ")]
+        var parts = ["<article><h1>", html(item.title), "</h1><p>", html(labels.joined(separator: " · ")),
+                     "</p><small>Saved ", stamp(item.createdAt), "</small><h2>Original</h2><pre>",
+                     html(item.original), "</pre><h2>Reading text</h2><pre>", html(item.readingText), "</pre>"]
+        for note in item.annotations {
+            parts.append(contentsOf: ["<blockquote>", html(note.quote), "</blockquote><p>", html(note.comment),
+                "</p><small>Created ", stamp(note.createdAt), " · Edited ", stamp(note.modifiedAt), "</small>"])
+        }
+        parts.append("</article>")
+        return parts.joined()
+    }
+
+    private static func folderName(_ item: LibraryItem, folders: [LibraryFolder]) -> String {
+        folders.first { $0.id == item.folderID }?.name ?? ""
+    }
+
+    private static func stamp(_ date: Date) -> String { ISO8601DateFormatter().string(from: date) }
 
     private static func html(_ text: String) -> String {
         text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")

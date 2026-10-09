@@ -253,10 +253,12 @@ public final class LibraryStore {
         guard sqlite3_bind_double(statement, 4, item.createdAt.timeIntervalSince1970) == SQLITE_OK,
               sqlite3_step(statement) == SQLITE_DONE else { throw failure() }
         try run("DELETE FROM item_search WHERE id=?;", values: [item.id.uuidString])
+        let notes = item.annotations.map { [$0.quote, $0.comment].joined(separator: "\n") }.joined(separator: "\n")
+        let labels = (item.tags ?? []).joined(separator: " ")
+        let searchComments = [notes, labels, item.category ?? ""].joined(separator: "\n")
+        let searchBody = [item.original, item.articleText ?? ""].joined(separator: "\n")
         try run("INSERT INTO item_search(id,title,body,comments) VALUES(?,?,?,?);",
-                values: [item.id.uuidString, item.title, item.original + "\n" + (item.articleText ?? ""),
-                         item.annotations.map { $0.quote + "\n" + $0.comment }.joined(separator: "\n")
-                            + "\n" + (item.tags ?? []).joined(separator: " ") + "\n" + (item.category ?? "")])
+                values: [item.id.uuidString, item.title, searchBody, searchComments])
     }
 
     private func deleteRow(id: UUID) throws {
