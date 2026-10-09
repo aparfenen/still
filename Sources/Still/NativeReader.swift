@@ -4,7 +4,7 @@ import StillCore
 
 /// Native selectable text, UTF-16 highlight anchors, and persisted scroll position.
 struct NativeReader: NSViewRepresentable {
-    let item: LibraryItem
+    let item: StillCore.LibraryItem
     @Binding var selection: NSRange
     var onPosition: (Double) -> Void
 

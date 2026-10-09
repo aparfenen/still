@@ -6,8 +6,8 @@ import UniformTypeIdentifiers
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var items: [LibraryItem] = []
-    @Published var matches: [LibraryItem] = []
+    @Published var items: [StillCore.LibraryItem] = []
+    @Published var matches: [StillCore.LibraryItem] = []
     @Published var query = ""
     @Published var selectedID: UUID?
     @Published var showCapture = false
@@ -65,7 +65,7 @@ final class AppModel: ObservableObject {
     }
 
     var isAvailable: Bool { store != nil }
-    var selected: LibraryItem? { items.first { $0.id == selectedID } }
+    var selected: StillCore.LibraryItem? { items.first { $0.id == selectedID } }
     var sources: [String] { Array(Set(items.compactMap(\.sourceApp))).sorted() }
 
     func reload() {
@@ -93,7 +93,7 @@ final class AppModel: ObservableObject {
         } catch { report(error); return false }
     }
 
-    func update(_ item: LibraryItem) {
+    func update(_ item: StillCore.LibraryItem) {
         guard let store else { return }
         do {
             var value = item
@@ -103,23 +103,23 @@ final class AppModel: ObservableObject {
         } catch { report(error) }
     }
 
-    func delete(_ item: LibraryItem) {
+    func delete(_ item: StillCore.LibraryItem) {
         guard let store else { return }
         do { try store.delete(id: item.id); reload() } catch { report(error) }
     }
 
-    func copyOriginal(_ item: LibraryItem) {
+    func copyOriginal(_ item: StillCore.LibraryItem) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(item.original, forType: .string)
         // Do not recapture Still's own copy action.
         pasteboardChange = NSPasteboard.general.changeCount
     }
 
-    func openOriginal(_ item: LibraryItem) {
+    func openOriginal(_ item: StillCore.LibraryItem) {
         if let url = item.url { NSWorkspace.shared.open(url) }
     }
 
-    func prepareReader(_ item: LibraryItem) {
+    func prepareReader(_ item: StillCore.LibraryItem) {
         guard let url = item.url, !preparedIDs.contains(item.id) else { return }
         if !item.annotations.isEmpty {
             errorMessage = "This item has annotations. Keep its current snapshot so their context stays intact."
@@ -149,7 +149,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func addAnnotation(item: LibraryItem, range: NSRange) {
+    func addAnnotation(item: StillCore.LibraryItem, range: NSRange) {
         let text = item.readingText as NSString
         guard range.location != NSNotFound, range.length > 0,
               range.location <= text.length, range.length <= text.length - range.location else { return }

@@ -4,7 +4,7 @@ import StillCore
 
 struct ReaderView: View {
     @EnvironmentObject var model: AppModel
-    let item: LibraryItem
+    let item: StillCore.LibraryItem
     @State private var selection = NSRange(location: NSNotFound, length: 0)
     @State private var showNotes = false
     @State private var editing: Annotation?
@@ -166,7 +166,7 @@ private struct CommentView: View {
 
 private struct SharePreview: View {
     @Environment(\.dismiss) private var dismiss
-    let item: LibraryItem
+    let item: StillCore.LibraryItem
     let annotation: Annotation
     @State private var includeComment = false
 

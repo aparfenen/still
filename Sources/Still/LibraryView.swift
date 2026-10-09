@@ -12,7 +12,7 @@ enum LibraryFilter: String, CaseIterable {
         case .finished: return "checkmark.circle"
         }
     }
-    func includes(_ item: LibraryItem) -> Bool {
+    func includes(_ item: StillCore.LibraryItem) -> Bool {
         switch self {
         case .inbox: return true
         case .unread: return item.status != .finished
@@ -35,10 +35,10 @@ struct LibraryView: View {
     @State private var filter: LibraryFilter = .inbox
     @State private var source = ""
     @State private var recentOnly = false
-    @State private var deleteCandidate: LibraryItem?
+    @State private var deleteCandidate: StillCore.LibraryItem?
     @FocusState private var searching: Bool
 
-    private var visible: [LibraryItem] {
+    private var visible: [StillCore.LibraryItem] {
         model.matches.filter {
             filter.includes($0) && (source.isEmpty || $0.sourceApp == source)
                 && (!recentOnly || $0.createdAt >= Date().addingTimeInterval(-7 * 86400))
@@ -179,7 +179,7 @@ struct LibraryView: View {
         }.padding(14)
     }
 
-    private func row(_ item: LibraryItem) -> some View {
+    private func row(_ item: StillCore.LibraryItem) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
                 if item.status == .unread { Circle().fill(Color.secondary).frame(width: 5, height: 5) }
