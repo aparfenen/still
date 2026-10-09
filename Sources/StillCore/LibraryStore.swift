@@ -26,7 +26,7 @@ public final class LibraryStore {
             try execute("PRAGMA journal_mode=WAL;")
             try execute("PRAGMA synchronous=FULL;")
             let version = try scalarInt("PRAGMA user_version;")
-            guard version <= 1 else {
+            guard version <= 2 else {
                 throw StoreError(message: "This library was created by a newer version of Still.")
             }
             if version == 0 {
@@ -41,6 +41,11 @@ public final class LibraryStore {
                         USING fts5(id UNINDEXED, title, body, comments);
                     PRAGMA user_version=1;
                     """)
+                }
+            }
+            if version < 2 {
+                try transaction {
+                    try execute("CREATE TABLE IF NOT EXISTS folders (id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE); PRAGMA user_version=2;")
                 }
             }
         } catch {
@@ -116,6 +121,13 @@ public final class LibraryStore {
     }
 
     public func save(_ item: LibraryItem) throws {
+        if let folderID = item.folderID, !(try folders()).contains(where: { $0.id == folderID }) {
+            throw StoreError(message: "That folder no longer exists. Choose another folder.")
+        }
+        guard (item.category ?? "").count <= 80, (item.tags ?? []).count <= 100,
+              (item.tags ?? []).allSatisfy({ !$0.isEmpty && $0.count <= 60 }) else {
+            throw StoreError(message: "Use up to 100 tags of 60 characters and a category of 80 characters.")
+        }
         try transaction { try write(item) }
     }
 
@@ -131,30 +143,96 @@ public final class LibraryStore {
         try transaction { for item in expired { try deleteRow(id: item.id) } }
     }
 
+    public func folders() throws -> [LibraryFolder] {
+        let statement = try prepare("SELECT id,name FROM folders ORDER BY name_key;")
+        defer { sqlite3_finalize(statement) }
+        var result: [LibraryFolder] = []
+        while true {
+            let step = sqlite3_step(statement)
+            if step == SQLITE_DONE { break }
+            guard step == SQLITE_ROW,
+                  let rawID = sqlite3_column_text(statement, 0),
+                  let name = sqlite3_column_text(statement, 1),
+                  let id = UUID(uuidString: String(cString: rawID)) else { throw failure() }
+            result.append(LibraryFolder(id: id, name: String(cString: name)))
+        }
+        return result
+    }
+
+    public func saveFolder(_ folder: LibraryFolder) throws {
+        let name = folder.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= 80 else {
+            throw StoreError(message: "Use a folder name between 1 and 80 characters.")
+        }
+        let key = name.lowercased()
+        guard !(try folders()).contains(where: { $0.id != folder.id && $0.name.lowercased() == key }) else {
+            throw StoreError(message: "A folder with that name already exists.")
+        }
+        try run("""
+        INSERT INTO folders(id,name,name_key) VALUES(?,?,?)
+        ON CONFLICT(id) DO UPDATE SET name=excluded.name,name_key=excluded.name_key;
+        """, values: [folder.id.uuidString, name, key])
+    }
+
+    public func deleteFolder(id: UUID) throws {
+        let assigned = try all().filter { $0.folderID == id }
+        try transaction {
+            for var item in assigned {
+                item.folderID = nil
+                // Deleting the folder must not turn its saved items back into expiring history.
+                item.isKept = true
+                item.modifiedAt = Date()
+                try write(item)
+            }
+            try run("DELETE FROM folders WHERE id=?;", values: [id.uuidString])
+        }
+    }
+
     public func exportData() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return try encoder.encode(LibraryArchive(items: all()))
+        return try encoder.encode(LibraryArchive(items: all(), folders: folders()))
     }
 
-    /// Merge an archive atomically. On conflict preserve existing items and annotations.
+    /// Merge atomically; preserve existing items and map folders with matching names.
     public func importData(_ data: Data) throws {
         guard data.count <= 100_000_000 else { throw StoreError(message: "The archive is too large.") }
         let archive = try JSONDecoder().decode(LibraryArchive.self, from: data)
-        guard archive.version == 1 else { throw StoreError(message: "Unsupported archive version.") }
+        guard [1, 2].contains(archive.version) else { throw StoreError(message: "Unsupported archive version.") }
         let existing = try all()
         var ids = Set(existing.map(\.id))
         var originals = Set(existing.map(\.original))
+        var knownFolders = try folders()
+        var folderMap: [UUID: UUID] = [:]
         try transaction {
-            for item in archive.items {
+            for folder in archive.folders ?? [] {
+                if let sameID = knownFolders.first(where: { $0.id == folder.id }) {
+                    folderMap[folder.id] = sameID.id
+                } else if let sameName = knownFolders.first(where: { $0.name.lowercased() == folder.name.lowercased() }) {
+                    folderMap[folder.id] = sameName.id
+                } else {
+                    try saveFolder(folder)
+                    knownFolders.append(folder)
+                    folderMap[folder.id] = folder.id
+                }
+            }
+            for var item in archive.items {
                 guard !item.original.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                       item.original.utf8.count <= 1_000_000,
                       item.readingText.utf8.count <= 5_000_000,
                       item.captureCount > 0,
                       item.readingOffset.isFinite, item.readingOffset >= 0,
+                      (item.tags ?? []).count <= 100,
+                      (item.category ?? "").count <= 80,
                       item.annotations.allSatisfy({ $0.location >= 0 && $0.length > 0 && !$0.quote.isEmpty })
                 else { throw StoreError(message: "The archive contains an invalid item.") }
                 guard !ids.contains(item.id), !originals.contains(item.original) else { continue }
+                if let folderID = item.folderID {
+                    guard let mapped = folderMap[folderID] ?? knownFolders.first(where: { $0.id == folderID })?.id else {
+                        throw StoreError(message: "An imported item refers to a missing folder.")
+                    }
+                    item.folderID = mapped
+                }
                 try write(item)
                 ids.insert(item.id)
                 originals.insert(item.original)
@@ -177,7 +255,8 @@ public final class LibraryStore {
         try run("DELETE FROM item_search WHERE id=?;", values: [item.id.uuidString])
         try run("INSERT INTO item_search(id,title,body,comments) VALUES(?,?,?,?);",
                 values: [item.id.uuidString, item.title, item.original + "\n" + (item.articleText ?? ""),
-                         item.annotations.map { $0.quote + "\n" + $0.comment }.joined(separator: "\n")])
+                         item.annotations.map { $0.quote + "\n" + $0.comment }.joined(separator: "\n")
+                            + "\n" + (item.tags ?? []).joined(separator: " ") + "\n" + (item.category ?? "")])
     }
 
     private func deleteRow(id: UUID) throws {

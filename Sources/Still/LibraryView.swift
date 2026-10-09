@@ -32,8 +32,13 @@ enum Palette {
 
 struct LibraryView: View {
     @EnvironmentObject var model: AppModel
+    @AppStorage("appearance") private var appearance = "system"
     @State private var filter: LibraryFilter = .inbox
     @State private var source = ""
+    @State private var folderID: UUID?
+    @State private var tag = ""
+    @State private var category = ""
+    @State private var organizingID: UUID?
     @State private var recentOnly = false
     @State private var deleteCandidate: StillCore.LibraryItem?
     @FocusState private var searching: Bool
@@ -41,6 +46,9 @@ struct LibraryView: View {
     private var visible: [StillCore.LibraryItem] {
         model.matches.filter {
             filter.includes($0) && (source.isEmpty || $0.sourceApp == source)
+                && (folderID == nil || $0.folderID == folderID)
+                && (tag.isEmpty || ($0.tags ?? []).contains(tag))
+                && (category.isEmpty || $0.category == category)
                 && (!recentOnly || $0.createdAt >= Date().addingTimeInterval(-7 * 86400))
         }
     }
@@ -74,6 +82,7 @@ struct LibraryView: View {
                                 Button(item.isKept ? "Unkeep" : "Keep") {
                                     var value = item; value.isKept.toggle(); model.update(value)
                                 }
+                                Button("Organize…") { organizingID = item.id }
                                 Button("Copy original") { model.copyOriginal(item) }
                                 Divider()
                                 Button("Delete…", role: .destructive) { deleteCandidate = item }
@@ -105,11 +114,17 @@ struct LibraryView: View {
             }
         }
         .background(Palette.paper)
+        .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
         .toolbar {
+            ToolbarItem(placement: .principal) { StillHeader() }
             ToolbarItem {
                 Button { model.showCapture = true } label: { Label("Save to Still", systemImage: "plus") }
                     .disabled(!model.isAvailable)
             }
+        }
+        .sheet(isPresented: $model.showOrganization) { OrganizationView().environmentObject(model) }
+        .sheet(isPresented: Binding(get: { organizingID != nil }, set: { if !$0 { organizingID = nil } })) {
+            if let id = organizingID { ItemOrganizationView(itemID: id).environmentObject(model) }
         }
         .sheet(isPresented: $model.showCapture) { CaptureView().environmentObject(model) }
         .sheet(isPresented: $model.showPreferences) { PreferencesView().environmentObject(model) }
@@ -136,36 +151,79 @@ struct LibraryView: View {
         }
     }
 
+    private var allTags: [String] { Array(Set(model.items.flatMap { $0.tags ?? [] })).sorted() }
+    private var categories: [String] { Array(Set(model.items.compactMap(\.category).filter { !$0.isEmpty })).sorted() }
+
     private var navigation: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "heart").font(.system(size: 20, weight: .light))
-                .padding(.top, 22).padding(.bottom, 20).accessibilityLabel("Still")
-            ForEach(LibraryFilter.allCases, id: \.self) { option in
-                Button {
-                    filter = option
-                    // Keep selection consistent with the navigation filter.
-                    if let selected = model.selected, !option.includes(selected) { model.selectedID = nil }
-                } label: {
-                    VStack(spacing: 5) {
-                        Image(systemName: option.icon).font(.system(size: 17))
-                        Text(option.rawValue).font(.system(size: 10))
-                        Text("\(model.items.filter(option.includes).count)")
-                            .font(.system(size: 10)).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(LibraryFilter.allCases, id: \.self) { option in
+                        sidebarButton(option.rawValue + "  \(model.items.filter(option.includes).count)", icon: option.icon,
+                                      selected: filter == option && folderID == nil && tag.isEmpty && category.isEmpty) {
+                            filter = option; folderID = nil; tag = ""; category = ""
+                            model.selectedID = nil
+                        }
                     }
-                    .frame(width: 58, height: 64)
-                    .background(filter == option ? Color.primary.opacity(0.07) : .clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(option.rawValue), \(model.items.filter(option.includes).count) items")
-                .accessibilityAddTraits(filter == option ? .isSelected : [])
+                    Divider().padding(.vertical, 8)
+                    HStack {
+                        Text("FOLDERS").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                        Spacer()
+                        Button { model.showOrganization = true } label: { Image(systemName: "plus") }
+                            .buttonStyle(.plain).accessibilityLabel("Manage folders")
+                    }.padding(.horizontal, 10)
+                    ForEach(model.folders) { folder in
+                        sidebarButton(folder.name, icon: "folder", selected: folderID == folder.id) {
+                            folderID = folder.id; filter = .inbox; tag = ""; category = ""; model.selectedID = nil
+                        }
+                    }
+                    if model.folders.isEmpty {
+                        Button("Create folder…") { model.showOrganization = true }.buttonStyle(.plain)
+                            .font(.caption).padding(10)
+                    }
+                    if !allTags.isEmpty {
+                        Divider().padding(.vertical, 8)
+                        Text("TAGS").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 10)
+                        ForEach(allTags, id: \.self) { name in
+                            sidebarButton(name, icon: "number", selected: tag == name) {
+                                tag = name; category = ""; folderID = nil; filter = .inbox; model.selectedID = nil
+                            }
+                        }
+                    }
+                    if !categories.isEmpty {
+                        Divider().padding(.vertical, 8)
+                        Text("CATEGORIES").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 10)
+                        ForEach(categories, id: \.self) { name in
+                            sidebarButton(name, icon: "square.grid.2x2", selected: category == name) {
+                                category = name; tag = ""; folderID = nil; filter = .inbox; model.selectedID = nil
+                            }
+                        }
+                    }
+                }.padding(.top, 16)
             }
-            Spacer()
-            Button { model.exportLibrary() } label: {
-                Image(systemName: "square.and.arrow.up")
-            }.buttonStyle(.plain).help("Export library").padding(.bottom, 20)
-        }
-        .frame(width: 76)
+            Divider()
+            Menu {
+                ForEach(LibraryExportFormat.allCases) { format in
+                    Button(format.label) { model.exportLibrary(format: format) }
+                }
+            } label: { Label("Export library", systemImage: "square.and.arrow.up") }
+                .menuStyle(.borderlessButton).font(.caption).padding(10)
+            Button { model.showPreferences = true } label: { Label("Settings", systemImage: "gearshape") }
+                .buttonStyle(.plain).font(.caption).padding(.horizontal, 10).padding(.bottom, 12)
+        }.padding(.horizontal, 8).frame(width: 174)
+    }
+
+    private func sidebarButton(_ title: String, icon: String, selected: Bool,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon).frame(width: 18).foregroundStyle(selected ? Brand.lavender : Color.secondary)
+                Text(title).lineLimit(1)
+                Spacer(minLength: 0)
+            }.font(.system(size: 12)).padding(.horizontal, 10).padding(.vertical, 8)
+                .background(selected ? Brand.lavender.opacity(0.14) : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var searchBar: some View {
@@ -201,7 +259,7 @@ struct LibraryView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "heart").font(.system(size: 38, weight: .ultraLight)).foregroundStyle(.secondary)
+            Image(systemName: "flag.fill").foregroundStyle(Brand.lavender).font(.system(size: 38, weight: .ultraLight)).foregroundStyle(.secondary)
             Text(model.items.isEmpty ? "A place for things worth keeping." : "Return to something useful.")
                 .font(.system(size: 22, weight: .regular, design: .serif))
             Text(model.items.isEmpty ? "Paste a link or a passage. Your library stays on this Mac." : "Choose an item from your library.")

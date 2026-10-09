@@ -5,8 +5,23 @@ import StillCore
 /// Native selectable text, UTF-16 highlight anchors, and persisted scroll position.
 struct NativeReader: NSViewRepresentable {
     let item: StillCore.LibraryItem
+    @AppStorage("readerFont") private var font = ReaderDefaults.font
+    @AppStorage("readerSize") private var fontSize = ReaderDefaults.size
+    @AppStorage("readerSpacing") private var lineSpacing = ReaderDefaults.spacing
+    @AppStorage("readerInset") private var inset = ReaderDefaults.inset
     @Binding var selection: NSRange
     var onPosition: (Double) -> Void
+
+    private var readingFont: NSFont {
+        let size = max(12, min(32, fontSize))
+        switch font {
+        case "serif": return NSFont(name: "Georgia", size: size) ?? .systemFont(ofSize: size)
+        case "rounded": return NSFont.systemFont(ofSize: size).fontDescriptor.withDesign(.rounded)
+            .flatMap { NSFont(descriptor: $0, size: size) } ?? .systemFont(ofSize: size)
+        case "mono": return .monospacedSystemFont(ofSize: size, weight: .regular)
+        default: return .systemFont(ofSize: size)
+        }
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -43,14 +58,17 @@ struct NativeReader: NSViewRepresentable {
         guard let text = scroll.documentView as? NSTextView else { return }
         let contentChanged = coordinator.itemID != item.id || text.string != item.readingText
         let annotationsChanged = coordinator.annotations != item.annotations
-        guard contentChanged || annotationsChanged else { return }
+        let styleKey = "\(font):\(fontSize):\(lineSpacing):\(inset)"
+        guard contentChanged || annotationsChanged || coordinator.styleKey != styleKey else { return }
+        coordinator.styleKey = styleKey
+        text.textContainerInset = NSSize(width: max(12, min(96, inset)), height: 24)
         coordinator.styling = true
         let selected = text.selectedRange()
         let style = NSMutableParagraphStyle()
-        style.lineSpacing = 7
+        style.lineSpacing = max(0, min(20, lineSpacing))
         style.paragraphSpacing = 14
         let attributed = NSMutableAttributedString(string: item.readingText, attributes: [
-            .font: NSFont.systemFont(ofSize: 17),
+            .font: readingFont,
             .foregroundColor: NSColor.labelColor,
             .paragraphStyle: style
         ])
@@ -91,6 +109,7 @@ struct NativeReader: NSViewRepresentable {
         weak var scroll: NSScrollView?
         var itemID: UUID?
         var annotations: [Annotation] = []
+        var styleKey = ""
         var styling = false
         var pending: DispatchWorkItem?
 

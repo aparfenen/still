@@ -1,4 +1,5 @@
 import XCTest
+import CSQLite
 @testable import StillCore
 
 final class LibraryStoreTests: XCTestCase {
@@ -87,7 +88,7 @@ final class LibraryStoreTests: XCTestCase {
 
     func testUnknownArchiveVersionIsRejected() throws {
         var archive = LibraryArchive(items: [LibraryItem(text: "Future", manual: true)])
-        archive.version = 2
+        archive.version = 3
         XCTAssertThrowsError(try store.importData(JSONEncoder().encode(archive)))
         XCTAssertTrue(try store.all().isEmpty)
     }
@@ -107,4 +108,91 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(LibraryItem(text: "https://example.com").url?.host, "example.com")
         XCTAssertThrowsError(try store.capture(text: "  \n ", manual: true))
     }
+    func testLegacyArchiveWithoutOrganizationStillImports() throws {
+        let item = LibraryItem(text: "Old saved content", manual: true)
+        let encoder = JSONEncoder()
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(item)) as? [String: Any])
+        object.removeValue(forKey: "tags")
+        object.removeValue(forKey: "folderID")
+        object.removeValue(forKey: "category")
+        let archive: [String: Any] = ["version": 1, "exportedAt": 0, "items": [object]]
+        try store.importData(JSONSerialization.data(withJSONObject: archive))
+        XCTAssertEqual(try store.all().first?.original, item.original)
+        XCTAssertNil(try store.all().first?.folderID)
+    }
+
+    func testSchemaOneMigrationPreservesItemsAndAddsFolders() throws {
+        let item = try store.capture(text: "Before migration", manual: true)
+        store = nil
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(directory.appendingPathComponent("library.sqlite").path, &db), SQLITE_OK)
+        XCTAssertEqual(sqlite3_exec(db, "DROP TABLE folders; PRAGMA user_version=1;", nil, nil, nil), SQLITE_OK)
+        sqlite3_close(db)
+        store = try LibraryStore(url: directory.appendingPathComponent("library.sqlite"))
+        XCTAssertEqual(try store.all().first?.id, item.id)
+        XCTAssertTrue(try store.folders().isEmpty)
+        try store.saveFolder(LibraryFolder(name: "Research"))
+        XCTAssertEqual(try store.folders().count, 1)
+    }
+
+    func testOrganizationSearchAndFolderDeletionPreserveContent() throws {
+        let folder = LibraryFolder(name: "Design")
+        try store.saveFolder(folder)
+        var item = try store.capture(text: "A saved passage", manual: false,
+                                     now: Date(timeIntervalSince1970: 0))
+        item.folderID = folder.id
+        item.tags = ["lavender", "inspiration"]
+        item.category = "Art"
+        try store.save(item)
+        XCTAssertEqual(try store.all(query: "lavender").first?.id, item.id)
+        XCTAssertEqual(try store.all(query: "Art").first?.id, item.id)
+        try store.prune(retentionDays: 1)
+        XCTAssertEqual(try store.all().count, 1)
+        try store.deleteFolder(id: folder.id)
+        XCTAssertNil(try store.all().first?.folderID)
+        XCTAssertTrue(try XCTUnwrap(store.all().first).isKept)
+        XCTAssertTrue(try store.folders().isEmpty)
+    }
+
+    func testFolderArchiveMergesMatchingNamesAndPreservesTags() throws {
+        let local = LibraryFolder(name: "Research")
+        try store.saveFolder(local)
+        let imported = LibraryFolder(name: "Research")
+        var item = LibraryItem(text: "Imported research")
+        item.folderID = imported.id
+        item.tags = ["Ideas"]
+        item.category = "Writing"
+        let archive = LibraryArchive(items: [item], folders: [imported])
+        try store.importData(JSONEncoder().encode(archive))
+        XCTAssertEqual(try store.folders().count, 1)
+        XCTAssertEqual(try store.all().first?.folderID, local.id)
+        XCTAssertEqual(try store.all().first?.tags, ["Ideas"])
+        let copy = try LibraryStore(url: directory.appendingPathComponent("copy/library.sqlite"))
+        try copy.importData(store.exportData())
+        XCTAssertEqual(try copy.folders(), try store.folders())
+        XCTAssertEqual(try copy.all(), try store.all())
+    }
+
+    func testFolderNamesAndTagNormalization() throws {
+        try store.saveFolder(LibraryFolder(name: "Work"))
+        XCTAssertThrowsError(try store.saveFolder(LibraryFolder(name: "work")))
+        XCTAssertThrowsError(try store.saveFolder(LibraryFolder(name: " ")))
+        XCTAssertEqual(Organization.normalizedTags(" Art, art, Research, , Ideas "), ["Art", "Research", "Ideas"])
+    }
+
+    func testReadableExportsEscapeHTMLAndSpreadsheetFormulas() throws {
+        var item = LibraryItem(text: "<script>alert(1)</script>", title: "=1+1")
+        item.tags = ["art"]
+        let csv = String(decoding: try LibraryExport.data(items: [item], folders: [], format: .csv), as: UTF8.self)
+        XCTAssertTrue(csv.contains("'=1+1"))
+        let html = String(decoding: try LibraryExport.data(items: [item], folders: [], format: .html), as: UTF8.self)
+        XCTAssertFalse(html.contains("<script>"))
+        XCTAssertTrue(html.contains("&lt;script&gt;"))
+        for format in [LibraryExportFormat.markdown, .text] {
+            let text = String(decoding: try LibraryExport.data(items: [item], folders: [], format: format), as: UTF8.self)
+            XCTAssertTrue(text.contains(item.original))
+            XCTAssertTrue(text.contains("art"))
+        }
+    }
+
 }

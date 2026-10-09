@@ -7,7 +7,7 @@ researchers, writers, students, and curious readers.
 
 This repository now contains an early, local-first MVP implementation. It is a
 development build, not an App Store release. The compact interface uses a narrow
-navigation rail, a library list, and a calm reader, with system light/dark appearance.
+organization sidebar, a library list, and a calm reader, with system light/dark appearance.
 
 ## Run on a Mac
 
@@ -42,13 +42,13 @@ Check the actual run status; a workflow file alone does not prove the checks pas
 4. Select words and choose **Highlight**. Open notes to add a timestamped comment.
    An annotated item is retained automatically.
 5. **Keep** uses the heart to prevent temporary history from expiring.
-   Manual saves already stay until deleted.
+   Manual saves already stay until deleted. Use **Organize…** to assign a folder, category, and comma-separated tags.
 6. Copy the original, share it, or preview and share an attributed highlight.
    Comments are excluded from excerpt sharing unless selected.
 7. Opt into **automatic capture** through the menu bar or Capture preferences.
    It starts paused by default and never imports the old clipboard on activation.
 
-## Included
+## Interface and organization\n\n- Lavender filled flag beside **still**, with a matching Dock/Finder icon.\n- **Settings → Reading**: system/serif/rounded/monospaced font, size, spacing, margins, and light/dark/system appearance.\n- Create, rename, or delete folders through the sidebar **+**. Deleting a folder keeps its items.\n- **Organize…** in the reader or item context menu assigns one folder, one category, and multiple tags.\n- Folder, tag, and category sidebar filters; tags/categories also participate in search.\n- Export the whole library or one item as JSON, Markdown, CSV, TXT, or HTML. Exports include comments.\n- JSON is the restore format, including empty folders. Other formats are readable exports, not backups.\n- Older libraries and version-1 JSON archives migrate without resetting saved content.\n\n## Included
 
 - Native SwiftUI app, menu bar controls, keyboard-friendly manual capture.
 - Optional plain-text/link clipboard polling, exclusions and sensitive markers.
@@ -59,14 +59,14 @@ Check the actual run status; a workflow file alone does not prove the checks pas
 - Native text selection, quotation-verified highlights, dated comments.
 - Restored reading scroll position, read/unread/finished states.
 - Native sharing with a preview for annotated excerpts.
-- Versioned JSON export and atomic merge import for recovery.
-- Temporary retention, default seven days; manual/kept/annotated items do not expire.
+- Versioned JSON backup plus Markdown/CSV/TXT/HTML export and atomic merge import.
+- Temporary retention, default seven days; manual/kept/annotated/organized items do not expire.
 - Storage tests and a macOS build workflow.
 
 ## Deliberately deferred
 
 iCloud sync, rich clipboard formats, images/PDFs, OCR, detailed statistics and
-reading timers, global configurable hotkeys, collections/tags, mobile apps and AI.
+reading timers, global configurable hotkeys, mobile apps and AI.
 The current shortcuts work inside Still; this version does not register a system-wide hotkey.
 Large-library performance has not been benchmarked: SQLite search is indexed, but
 the UI currently loads item metadata/payloads into memory. Pagination/background
@@ -96,7 +96,7 @@ See [privacy details](docs/PRIVACY.md), [manual QA](docs/QA.md) and
 ## Design direction
 
 Working name: Still. Calm ivory, native controls, subtle highlights, and a meaningful
-heart for Keep. The actual user's artwork has not been supplied; no invented art is
+heart for Keep, and a lavender flag for the app identity. The actual user's artwork has not been supplied; no invented art is
 presented as theirs.
 
 [Compact visual concepts](https://canva.link/px2nevo90jok8wj) ·

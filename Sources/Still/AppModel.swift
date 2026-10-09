@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
 @MainActor
 final class AppModel: ObservableObject {
     @Published var items: [StillCore.LibraryItem] = []
+    @Published var folders: [LibraryFolder] = []
+    @Published var showOrganization = false
     @Published var matches: [StillCore.LibraryItem] = []
     @Published var query = ""
     @Published var selectedID: UUID?
@@ -74,6 +76,7 @@ final class AppModel: ObservableObject {
             let all = try store.all()
             let found = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? all : try store.all(query: query)
+            folders = try store.folders()
             items = all
             matches = found
             if let selectedID, !all.contains(where: { $0.id == selectedID }) { self.selectedID = nil }
@@ -166,13 +169,32 @@ final class AppModel: ObservableObject {
         update(value)
     }
 
-    func exportLibrary() {
+    func saveFolder(name: String, id: UUID? = nil) {
         guard let store else { return }
+        do { try store.saveFolder(LibraryFolder(id: id ?? UUID(), name: name)); reload() }
+        catch { report(error) }
+    }
+
+    func deleteFolder(_ folder: LibraryFolder) {
+        guard let store else { return }
+        do { try store.deleteFolder(id: folder.id); reload() } catch { report(error) }
+    }
+
+    func exportLibrary(format: LibraryExportFormat = .json) {
+        exportItems(items, format: format)
+    }
+
+    func exportItems(_ selectedItems: [StillCore.LibraryItem], format: LibraryExportFormat) {
+        guard store != nil else { return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "Still-library.json"
+        panel.allowedContentTypes = [UTType(filenameExtension: format.fileExtension) ?? .data]
+        panel.nameFieldStringValue = "Still-library." + format.fileExtension
+        panel.message = "Exports include saved text, highlights, and comments."
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do { try store.exportData().write(to: url, options: .atomic) } catch { report(error) }
+        do {
+            try LibraryExport.data(items: selectedItems, folders: folders, format: format)
+                .write(to: url, options: .atomic)
+        } catch { report(error) }
     }
 
     func importLibrary() {

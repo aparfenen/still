@@ -7,6 +7,7 @@ struct ReaderView: View {
     let item: StillCore.LibraryItem
     @State private var selection = NSRange(location: NSNotFound, length: 0)
     @State private var showNotes = false
+    @State private var showOrganization = false
     @State private var editing: Annotation?
     @State private var sharing: Annotation?
     @State private var deleting: Annotation?
@@ -43,6 +44,12 @@ struct ReaderView: View {
                 Button {
                     showNotes.toggle()
                 } label: { Label("\(item.annotations.count) notes", systemImage: "text.bubble") }
+                Button("Organize…") { showOrganization = true }
+                Menu("Export") {
+                    ForEach(LibraryExportFormat.allCases) { format in
+                        Button(format.label) { model.exportItems([item], format: format) }
+                    }
+                }.menuStyle(.borderlessButton)
                 Spacer()
                 Picker("Reading status", selection: Binding(
                     get: { item.status },
@@ -53,6 +60,13 @@ struct ReaderView: View {
                     }
                 }.labelsHidden().frame(width: 115)
             }.font(.caption).padding(.horizontal, 24).padding(.bottom, 14)
+            if item.folderID != nil || !(item.tags ?? []).isEmpty || !(item.category ?? "").isEmpty {
+                Text(([model.folders.first { $0.id == item.folderID }?.name, item.category]
+                    .compactMap { $0 }.filter { !$0.isEmpty } + (item.tags ?? []).map { "#" + $0 })
+                    .joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.bottom, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             Divider()
             if item.url != nil && item.articleText == nil {
                 HStack {
@@ -110,6 +124,7 @@ struct ReaderView: View {
             }.padding(14)
         }
         .background(Palette.paper)
+        .sheet(isPresented: $showOrganization) { ItemOrganizationView(itemID: item.id).environmentObject(model) }
         .sheet(item: $editing) { note in
             CommentView(itemID: item.id, annotation: note).environmentObject(model)
         }

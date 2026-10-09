@@ -58,6 +58,10 @@ public struct LibraryItem: Identifiable, Codable, Equatable, Sendable {
     public var snapshotAt: Date?
     public var readingOffset: Double
     public var annotations: [Annotation]
+    // Optional fields let pre-organization libraries decode without losing data.
+    public var tags: [String]?
+    public var folderID: UUID?
+    public var category: String?
 
     public init(text: String, title: String = "", sourceApp: String? = nil,
                 sourceBundleID: String? = nil, manual: Bool = true, now: Date = Date()) {
@@ -78,6 +82,9 @@ public struct LibraryItem: Identifiable, Codable, Equatable, Sendable {
         snapshotAt = nil
         readingOffset = 0
         annotations = []
+        tags = nil
+        folderID = nil
+        category = nil
     }
 
     public var url: URL? {
@@ -89,7 +96,10 @@ public struct LibraryItem: Identifiable, Codable, Equatable, Sendable {
     }
 
     public var readingText: String { articleText ?? original }
-    public var isPermanent: Bool { isKept || isManual || !annotations.isEmpty }
+    public var isPermanent: Bool {
+        isKept || isManual || !annotations.isEmpty || folderID != nil
+            || !(tags ?? []).isEmpty || !(category ?? "").isEmpty
+    }
 
     public func expiresAt(retentionDays: Int) -> Date? {
         guard !isPermanent else { return nil }
@@ -109,10 +119,12 @@ public struct LibraryArchive: Codable, Sendable {
     public var version: Int
     public var exportedAt: Date
     public var items: [LibraryItem]
+    public var folders: [LibraryFolder]?
 
-    public init(items: [LibraryItem]) {
-        version = 1
+    public init(items: [LibraryItem], folders: [LibraryFolder] = []) {
+        version = 2
         exportedAt = Date()
         self.items = items
+        self.folders = folders
     }
 }
