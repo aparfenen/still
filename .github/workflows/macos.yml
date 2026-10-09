@@ -21,9 +21,51 @@ jobs:
         run: swift test
       - name: Build application bundle
         run: bash scripts/build-app.sh
-      - name: Package development build
-        run: ditto -c -k --sequesterRsrc --keepParent dist/Still.app dist/Still-macOS.zip
+      - name: Package and verify development ZIP
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent dist/Still.app dist/Still-macOS.zip
+          unzip -t dist/Still-macOS.zip
+          ditto -x -k dist/Still-macOS.zip "$RUNNER_TEMP/still-zip-check"
+          test -x "$RUNNER_TEMP/still-zip-check/Still.app/Contents/MacOS/Still"
+          codesign --verify --strict "$RUNNER_TEMP/still-zip-check/Still.app"
+      - name: Create and verify drag-to-install disk image
+        run: |
+          mkdir -p dist/dmg-root
+          ditto dist/Still.app dist/dmg-root/Still.app
+          ln -s /Applications dist/dmg-root/Applications
+          hdiutil create -volname Still -srcfolder dist/dmg-root -format UDZO -ov dist/Still.dmg
+          hdiutil verify dist/Still.dmg
+          hdiutil attach -readonly -nobrowse -mountpoint "$RUNNER_TEMP/still-dmg-check" dist/Still.dmg
+          trap 'hdiutil detach "$RUNNER_TEMP/still-dmg-check"' EXIT
+          test -x "$RUNNER_TEMP/still-dmg-check/Still.app/Contents/MacOS/Still"
+          plutil -lint "$RUNNER_TEMP/still-dmg-check/Still.app/Contents/Info.plist"
+          codesign --verify --strict "$RUNNER_TEMP/still-dmg-check/Still.app"
+          file "$RUNNER_TEMP/still-dmg-check/Still.app/Contents/MacOS/Still"
+          test -L "$RUNNER_TEMP/still-dmg-check/Applications"
+          shasum -a 256 dist/Still.dmg dist/Still-macOS.zip > dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: Still-macOS-development
-          path: dist/Still-macOS.zip
+          path: |
+            dist/Still.dmg
+            dist/Still-macOS.zip
+            dist/SHA256SUMS.txt
+
+  release:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Still-macOS-development
+          path: dist
+      - name: Publish verified development downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          STILL_RELEASE_TAG="preview-${GITHUB_SHA:0:7}"
+          gh release create "$STILL_RELEASE_TAG" dist/Still.dmg dist/Still-macOS.zip dist/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Still development preview" --notes "Apple silicon Mac, macOS 14 or later. Download Still.dmg, open it, and drag Still into Applications. This is an ad-hoc signed development build, not notarized or App Store reviewed. ZIP and DMG integrity, extraction/mounting, and the app signature were checked on macOS. SHA256SUMS.txt lists file checksums."
