@@ -62,6 +62,7 @@ public struct LibraryItem: Identifiable, Codable, Equatable, Sendable {
     public var tags: [String]?
     public var folderID: UUID?
     public var category: String?
+    public var deletedAt: Date?
 
     public init(text: String, title: String = "", sourceApp: String? = nil,
                 sourceBundleID: String? = nil, manual: Bool = true, now: Date = Date()) {
@@ -122,7 +123,7 @@ public struct LibraryArchive: Codable, Sendable {
     public var folders: [LibraryFolder]?
 
     public init(items: [LibraryItem], folders: [LibraryFolder] = []) {
-        version = 2
+        version = 3
         exportedAt = Date()
         self.items = items
         self.folders = folders

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import StillCore
+typealias ViewState<Value> = SwiftUI.State<Value>
 
 @main
 @MainActor
