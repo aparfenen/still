@@ -5,8 +5,8 @@
 A native Mac app for people who collect information while working: designers,
 researchers, writers, students, and curious readers.
 
-This repository now contains an early, local-first MVP implementation. It is a
-development build, not an App Store release. The compact interface uses a narrow
+Still v0.1 is being prepared for public beta. The local build works; public release
+is pending Developer ID signing, notarization, and clean-install verification. The compact interface uses a narrow
 organization sidebar, a library list, and a calm reader, with system light/dark appearance.
 
 ## Run on a Mac
@@ -18,7 +18,7 @@ No third-party package downloads are required; SQLite comes with macOS.
 git clone https://github.com/aparfenen/still.git
 cd still
 swift test
-bash scripts/build-app.sh
+./scripts/build-app.sh
 open dist/Still.app
 ```
 
@@ -46,13 +46,14 @@ Check the actual run status; a workflow file alone does not prove the checks pas
 6. Copy the original, share it, or preview and share an attributed highlight.
    Comments are excluded from excerpt sharing unless selected.
 7. Opt into **automatic capture** through the menu bar or Capture preferences.
-   It starts paused by default and never imports the old clipboard on activation.
+   It starts paused on every launch and never imports the old clipboard on activation.
 
 ## How long are items stored?
 
 | Item | Retention |
 |---|---|
 | Manually pasted and saved items | Until you delete them |
+| Recently Deleted | Recoverable for 30 days, then purged when Still runs |
 | Automatic clipboard captures | **7 days by default**, measured from the latest copy of the same content |
 | Kept, highlighted, commented, or organized items | No automatic expiry |
 
@@ -76,8 +77,8 @@ for one item.
 | Simple text you can open almost anywhere | **Plain text (TXT)** |
 
 **Recommended routine:** save a JSON backup regularly; use Markdown when taking
-notes elsewhere. JSON preserves saved content, annotations and timestamps,
-organization, and folders (including empty folders). Only JSON can be imported
+notes elsewhere. JSON preserves saved content (including Recently Deleted), annotations and timestamps,
+organization, and folders (including empty folders). Version-3 backups require this beta or newer. The import limit is 100 MB. Only JSON can be imported
 back into Still; the other formats are readable exports.
 
 All exports include saved text, highlights, and comments. Keep private backups
@@ -152,3 +153,19 @@ presented as theirs.
 
 The implementation follows the direction of those static concepts, rather than
 claiming pixel-for-pixel fidelity.
+
+## Recovery and installation
+
+Choose **Recently Deleted**, select an item, and click **Restore**. The sidebar's
+**Undo delete** restores the most recent deletion in the current session. Restored
+items are kept, with their text, highlights, comments, and organization intact.
+Automatic history expiry is separate from deletion and cannot be undone.
+
+Once the notarized public beta is available in [GitHub Releases](https://github.com/aparfenen/still/releases),
+download its ZIP, double-click to expand it, drag Still to Applications, then open it.
+No terminal is required for that release. Development artifacts are not the public beta;
+do not disable Gatekeeper to install them. The current local build targets Apple silicon
+and requires macOS 14 or newer; universal builds must be tested before claiming Intel support.
+
+For Command Line Tools without XCTest, run `./scripts/test-local.sh`. The same storage
+cases run under XCTest in CI. Release maintainers should follow [the release procedure](docs/RELEASE.md).
