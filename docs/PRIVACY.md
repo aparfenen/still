@@ -1,6 +1,6 @@
 # Capture and privacy boundaries
 
-Automatic capture is off on first launch. A saved opt-in persists between launches.
+Automatic capture starts paused on every launch. Enable it deliberately for each session.
 Pausing stops polling. Enabling starts at the current pasteboard change count, so
 old clipboard content is not silently imported. Manual paste is always intentional.
 
@@ -18,8 +18,9 @@ Automatic history expires after the configured 1, 7 or 30 days, measured from th
 latest exact-content capture. Pruning occurs at launch, about hourly while running,
 and when retention changes. There is no background pruning while Still is closed.
 Manual saves, kept items, and items with annotations never expire automatically.
-Deleting an item removes its snapshots and annotations from the active database and
-search index. There is no undo or trash yet. Deleted bytes may remain in SQLite pages,
+Deleting an item moves its snapshots and annotations to Recently Deleted for 30 days.
+Restore it there or use Undo delete. Deleted items are excluded from normal search
+and included in JSON backups. After 30 days they are purged when Still next prunes. Deleted bytes may remain in SQLite pages,
 WAL files, exports or OS backups; this is not secure erasure.
 
 Diagnostics use OSLog operational messages with no clipboard payloads. System log
@@ -32,6 +33,6 @@ No remote page scripts are executed. Websites see normal network metadata.
 The reader never sends a library or comment to a remote service. Native sharing
 transmits only the chosen content to the destination selected by the user.
 
-The development build is not sandboxed, notarized or App Store reviewed. Signing,
-App Sandbox capabilities, network entitlements, accessibility review and App Store
-privacy disclosures must be completed and tested before distribution.
+Local development builds are ad-hoc signed and are not notarized. Public distribution
+requires Developer ID signing, notarization and clean-install verification. The app
+is not sandboxed or App Store reviewed; its intended distribution is GitHub Releases.

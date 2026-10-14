@@ -7,8 +7,12 @@ import UniformTypeIdentifiers
 @MainActor
 final class AppModel: ObservableObject {
     @Published var items: [StillCore.LibraryItem] = []
+    @Published var deletedItems: [StillCore.LibraryItem] = []
+    @Published var lastDeletedID: UUID?
+    @Published var notice: String?
     @Published var folders: [LibraryFolder] = []
     @Published var showOrganization = false
+    @Published var deletedMatches: [StillCore.LibraryItem] = []
     @Published var matches: [StillCore.LibraryItem] = []
     @Published var query = ""
     @Published var selectedID: UUID?
@@ -47,8 +51,8 @@ final class AppModel: ObservableObject {
             "retentionDays": 7, "excludedApps": Self.excludedDefaults
         ])
         do {
-            let root = try FileManager.default.url(for: .applicationSupportDirectory,
-                                                    in: .userDomainMask, appropriateFor: nil, create: true)
+            let root = try ProcessInfo.processInfo.environment["STILL_DATA_ROOT"].map { URL(fileURLWithPath: $0) }
+                ?? (FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))
             store = try LibraryStore(url: root.appendingPathComponent("Still/library.sqlite"))
             // Restrict local file access to this OS account. No application-level encryption yet.
             let directory = root.appendingPathComponent("Still")
@@ -59,27 +63,30 @@ final class AppModel: ObservableObject {
             errorMessage = error.localizedDescription
             log.error("Library initialization failed; no reset performed.")
         }
-        captureEnabled = UserDefaults.standard.bool(forKey: "captureEnabled")
-        // A prior explicit opt-in persists, but capture always begins from current change count.
+        captureEnabled = false
+        // Always require a new opt-in after launch; never read a previous clipboard.
         timer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.pollClipboard() }
         }
     }
 
     var isAvailable: Bool { store != nil }
-    var selected: StillCore.LibraryItem? { items.first { $0.id == selectedID } }
+    var selected: StillCore.LibraryItem? { (items + deletedItems).first { $0.id == selectedID } }
     var sources: [String] { Array(Set(items.compactMap(\.sourceApp))).sorted() }
 
     func reload() {
         guard let store else { return }
         do {
-            let all = try store.all()
+            let allWithDeleted = try store.all(includeDeleted: true)
+            let all = allWithDeleted.filter { $0.deletedAt == nil }
+            deletedItems = allWithDeleted.filter { $0.deletedAt != nil }
             let found = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? all : try store.all(query: query)
+                ? allWithDeleted : try store.all(query: query, includeDeleted: true)
             folders = try store.folders()
             items = all
-            matches = found
-            if let selectedID, !all.contains(where: { $0.id == selectedID }) { self.selectedID = nil }
+            matches = found.filter { $0.deletedAt == nil }
+            deletedMatches = found.filter { $0.deletedAt != nil }
+            if let selectedID, !allWithDeleted.contains(where: { $0.id == selectedID }) { self.selectedID = nil }
         } catch { report(error) }
     }
 
@@ -108,7 +115,7 @@ final class AppModel: ObservableObject {
 
     func delete(_ item: StillCore.LibraryItem) {
         guard let store else { return }
-        do { try store.delete(id: item.id); reload() } catch { report(error) }
+        do { try store.delete(id: item.id); lastDeletedID = item.id; notice = "Moved to Recently Deleted. Recoverable for 30 days."; reload() } catch { report(error) }
     }
 
     func copyOriginal(_ item: StillCore.LibraryItem) {
@@ -180,8 +187,13 @@ final class AppModel: ObservableObject {
         do { try store.deleteFolder(id: folder.id); reload() } catch { report(error) }
     }
 
+    func restore(_ id: UUID) {
+        guard let store else { return }
+        do { try store.restore(id: id); lastDeletedID = nil; selectedID = nil; notice = "Restored and kept."; reload() } catch { report(error) }
+    }
+
     func exportLibrary(format: LibraryExportFormat = .json) {
-        exportItems(items, format: format)
+        exportItems(format == .json ? items + deletedItems : items, format: format)
     }
 
     func exportItems(_ selectedItems: [StillCore.LibraryItem], format: LibraryExportFormat) {
@@ -190,11 +202,17 @@ final class AppModel: ObservableObject {
         panel.allowedContentTypes = [UTType(filenameExtension: format.fileExtension) ?? .data]
         panel.nameFieldStringValue = "Still-library." + format.fileExtension
         panel.message = "Exports include saved text, highlights, and comments."
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try LibraryExport.data(items: selectedItems, folders: folders, format: format)
-                .write(to: url, options: .atomic)
-        } catch { report(error) }
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url, let self else { return }
+            do {
+                let data = try LibraryExport.data(items: selectedItems, folders: self.folders, format: format)
+                guard format != .json || data.count <= 100_000_000 else {
+                    throw StoreError(message: "This backup exceeds the 100 MB import limit. Export smaller groups of items instead.")
+                }
+                try data.write(to: url, options: .atomic)
+                self.notice = "Export saved."
+            } catch { self.report(error) }
+        }
     }
 
     func importLibrary() {
@@ -202,15 +220,18 @@ final class AppModel: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        panel.begin { [weak self] response in
+        guard response == .OK, let url = panel.url, let self else { return }
         do {
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
             guard ((attributes[.size] as? NSNumber)?.intValue ?? Int.max) <= 100_000_000 else {
                 throw StoreError(message: "Choose an archive smaller than 100 MB.")
             }
             try store.importData(Data(contentsOf: url))
-            reload()
-        } catch { report(error) }
+            self.reload()
+            self.notice = "Backup imported. Existing items were preserved."
+        } catch { self.report(error) }
+        }
     }
 
     func pruneNow() {
@@ -233,10 +254,11 @@ final class AppModel: ObservableObject {
         guard source?.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
         let excluded = Set((UserDefaults.standard.string(forKey: "excludedApps") ?? "")
             .split(whereSeparator: { $0.isWhitespace }).map(String.init))
-        guard !excluded.contains(source?.bundleIdentifier ?? "") else { return }
+        guard let bundle = source?.bundleIdentifier, !excluded.contains(bundle) else { return }
         guard let text = pasteboard.string(forType: .string),
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               text.utf8.count <= 1_000_000 else { return }
+        guard pasteboard.changeCount == pasteboardChange, NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundle else { return }
         // Frontmost app is an estimate, not a guaranteed clipboard author.
         _ = capture(text, manual: false, source: source)
     }

@@ -1,0 +1,38 @@
+Still 0.1 — private development preview
+Capture effortlessly. Keep reliably. Find instantly.
+
+REQUIREMENTS
+Apple silicon Mac (M1 or newer), macOS 14 or newer.
+
+INSTALLATION STATUS
+This build is ad-hoc signed, not Developer ID signed or notarized by Apple.
+macOS may block it after download. It is not yet the normal-install public beta.
+If macOS blocks it, stop and ask Anna for the signed build. Do not disable Gatekeeper.
+Once a signed build is available, expand its ZIP and drag Still into Applications.
+
+FIRST USE
+Open Still, click + (or Command-N), paste a passage or link, and save.
+Search finds saved text and comments. Highlight a passage to attach a comment.
+Deleted items can be restored from Recently Deleted for 30 days. Undo delete
+restores the latest deletion in the current session.
+
+BACK UP
+Use Export library > JSON backup. Import through Library > Import Library.
+JSON includes notes, folders and Recently Deleted. Imports merge without replacing
+existing items. Keep backups private; they contain readable text and comments.
+The maximum import size is 100 MB. Other export formats cannot restore a library.
+
+PRIVACY AND LIMITS
+Capture starts paused at every launch. Manual saving is the simplest starting point.
+Automatic capture is optional; app exclusions and sensitive clipboard markers do
+not guarantee that secrets are excluded. Source-app labels are only estimates.
+Temporary automatic history expires separately from deletion and is not recoverable.
+Still stores data locally without app-level encryption. No analytics or sync.
+Article extraction is basic and can fail on restricted or complex websites.
+No global shortcut or verified Intel support. Large libraries are not benchmarked.
+
+FEEDBACK
+Tell Anna what you tried, what you expected, and what happened, with your macOS
+version. Share screenshots only after checking them for private content.
+
+This ZIP contains the app and this guide only, never Anna's library or test records.

@@ -20,7 +20,7 @@ jobs:
       - name: Test durable storage and annotations
         run: swift test
       - name: Build application bundle
-        run: bash scripts/build-app.sh
+        run: ./scripts/build-app.sh
       - name: Package and verify development ZIP
         run: |
           ditto -c -k --sequesterRsrc --keepParent dist/Still.app dist/Still-macOS.zip
@@ -50,22 +50,3 @@ jobs:
             dist/Still.dmg
             dist/Still-macOS.zip
             dist/SHA256SUMS.txt
-
-  release:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: Still-macOS-development
-          path: dist
-      - name: Publish verified development downloads
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          STILL_RELEASE_TAG="preview-${GITHUB_SHA:0:7}"
-          gh release create "$STILL_RELEASE_TAG" dist/Still.dmg dist/Still-macOS.zip dist/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Still development preview" --notes "Apple silicon Mac, macOS 14 or later. Download Still.dmg, open it, and drag Still into Applications. This is an ad-hoc signed development build, not notarized or App Store reviewed. ZIP and DMG integrity, extraction/mounting, and the app signature were checked on macOS. SHA256SUMS.txt lists file checksums."

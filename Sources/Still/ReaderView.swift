@@ -5,12 +5,12 @@ import StillCore
 struct ReaderView: View {
     @EnvironmentObject var model: AppModel
     let item: StillCore.LibraryItem
-    @State private var selection = NSRange(location: NSNotFound, length: 0)
-    @State private var showNotes = false
-    @State private var showOrganization = false
-    @State private var editing: Annotation?
-    @State private var sharing: Annotation?
-    @State private var deleting: Annotation?
+    @ViewState private var selection = NSRange(location: NSNotFound, length: 0)
+    @ViewState private var showNotes = false
+    @ViewState private var showOrganization = false
+    @ViewState private var editing: Annotation?
+    @ViewState private var sharing: Annotation?
+    @ViewState private var deleting: Annotation?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -150,7 +150,7 @@ private struct CommentView: View {
     @Environment(\.dismiss) private var dismiss
     let itemID: UUID
     let annotation: Annotation
-    @State private var comment = ""
+    @ViewState private var comment = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -183,7 +183,7 @@ private struct SharePreview: View {
     @Environment(\.dismiss) private var dismiss
     let item: StillCore.LibraryItem
     let annotation: Annotation
-    @State private var includeComment = false
+    @ViewState private var includeComment = false
 
     private var sharedText: String {
         var result = "“\(annotation.quote)”\n\n— \(item.title)"

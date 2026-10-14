@@ -4,9 +4,9 @@ import StillCore
 struct OrganizationView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var editingID: UUID?
-    @State private var deleting: LibraryFolder?
+    @ViewState private var name = ""
+    @ViewState private var editingID: UUID?
+    @ViewState private var deleting: LibraryFolder?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -52,10 +52,10 @@ struct ItemOrganizationView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let itemID: UUID
-    @State private var folderID: UUID?
-    @State private var tags = ""
-    @State private var category = ""
-    @State private var newFolder = ""
+    @ViewState private var folderID: UUID?
+    @ViewState private var tags = ""
+    @ViewState private var category = ""
+    @ViewState private var newFolder = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
