@@ -169,3 +169,11 @@ and requires macOS 14 or newer; universal builds must be tested before claiming 
 
 For Command Line Tools without XCTest, run `./scripts/test-local.sh`. The same storage
 cases run under XCTest in CI. Release maintainers should follow [the release procedure](docs/RELEASE.md).
+
+## Private development preview
+
+`./scripts/package-preview.sh` packages the already-built app with a short tester
+guide, verifies the extracted signature and executable, and generates a checksum.
+The resulting `Still-0.1.0-private-preview-arm64.zip` is ad-hoc signed and **not
+notarized**; macOS may block downloaded copies. This is not the normal-install public
+beta. It contains no library or preferences. See [the tester guide](docs/FRIENDS-PREVIEW.txt).
