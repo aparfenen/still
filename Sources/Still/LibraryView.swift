@@ -3,9 +3,10 @@ import AppKit
 import StillCore
 
 enum LibraryFilter: String, CaseIterable {
-    case inbox = "Inbox", unread = "Unread", kept = "Kept", finished = "Finished"
+    case inbox = "Inbox", unread = "Unread", kept = "Kept", finished = "Finished", deleted = "Recently Deleted"
     var icon: String {
         switch self {
+        case .deleted: return "trash"
         case .inbox: return "tray"
         case .unread: return "circle"
         case .kept: return "heart"
@@ -14,7 +15,8 @@ enum LibraryFilter: String, CaseIterable {
     }
     func includes(_ item: StillCore.LibraryItem) -> Bool {
         switch self {
-        case .inbox: return true
+        case .deleted: return item.deletedAt != nil
+        case .inbox: return item.deletedAt == nil
         case .unread: return item.status != .finished
         case .kept: return item.isKept
         case .finished: return item.status == .finished
@@ -33,18 +35,18 @@ enum Palette {
 struct LibraryView: View {
     @EnvironmentObject var model: AppModel
     @AppStorage("appearance") private var appearance = "system"
-    @State private var filter: LibraryFilter = .inbox
-    @State private var source = ""
-    @State private var folderID: UUID?
-    @State private var tag = ""
-    @State private var category = ""
-    @State private var organizingID: UUID?
-    @State private var recentOnly = false
-    @State private var deleteCandidate: StillCore.LibraryItem?
+    @ViewState private var filter: LibraryFilter = .inbox
+    @ViewState private var source = ""
+    @ViewState private var folderID: UUID?
+    @ViewState private var tag = ""
+    @ViewState private var category = ""
+    @ViewState private var organizingID: UUID?
+    @ViewState private var recentOnly = false
+    @ViewState private var deleteCandidate: StillCore.LibraryItem?
     @FocusState private var searching: Bool
 
     private var visible: [StillCore.LibraryItem] {
-        model.matches.filter {
+        (filter == .deleted ? model.deletedMatches : model.matches).filter {
             filter.includes($0) && (source.isEmpty || $0.sourceApp == source)
                 && (folderID == nil || $0.folderID == folderID)
                 && (tag.isEmpty || ($0.tags ?? []).contains(tag))
@@ -79,6 +81,9 @@ struct LibraryView: View {
                     ForEach(visible) { item in
                         row(item).tag(item.id)
                             .contextMenu {
+                                if item.deletedAt != nil {
+                                    Button("Restore") { model.restore(item.id) }
+                                } else {
                                 Button(item.isKept ? "Unkeep" : "Keep") {
                                     var value = item; value.isKept.toggle(); model.update(value)
                                 }
@@ -86,6 +91,7 @@ struct LibraryView: View {
                                 Button("Copy original") { model.copyOriginal(item) }
                                 Divider()
                                 Button("Delete…", role: .destructive) { deleteCandidate = item }
+                                }
                             }
                     }
                 }
@@ -108,7 +114,13 @@ struct LibraryView: View {
             .frame(width: 282)
             Divider()
             if let item = model.selected {
-                ReaderView(item: item).id(item.id).frame(maxWidth: .infinity, maxHeight: .infinity)
+                if let deleted = item.deletedAt {
+                    VStack(spacing: 20) {
+                        Text(item.title).font(.title2)
+                        Text("Recoverable until \(deleted.addingTimeInterval(30 * 86400).formatted(date: .abbreviated, time: .shortened)).")
+                        Button("Restore to library") { model.restore(item.id) }.buttonStyle(.borderedProminent)
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else { ReaderView(item: item).id(item.id).frame(maxWidth: .infinity, maxHeight: .infinity) }
             } else {
                 emptyState.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -141,10 +153,10 @@ struct LibraryView: View {
                 if let item = deleteCandidate { model.delete(item) }
                 deleteCandidate = nil
             }
-        } message: { Text("Its saved text, highlights, and comments will be removed from this Mac.") }
+        } message: { Text("Its saved text, highlights, and comments can be restored from Recently Deleted for 30 days.") }
         .onChange(of: model.query) { _, _ in model.reload() }
         .onChange(of: model.selectedID) { _, _ in
-            if var selected = model.selected, selected.status == .unread {
+            if var selected = model.selected, selected.deletedAt == nil, selected.status == .unread {
                 selected.status = .reading
                 model.update(selected)
             }
@@ -159,9 +171,10 @@ struct LibraryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 5) {
                     ForEach(LibraryFilter.allCases, id: \.self) { option in
-                        sidebarButton(option.rawValue + "  \(model.items.filter(option.includes).count)", icon: option.icon,
+                        sidebarButton(option.rawValue + "  \((option == .deleted ? model.deletedItems : model.items).filter(option.includes).count)", icon: option.icon,
                                       selected: filter == option && folderID == nil && tag.isEmpty && category.isEmpty) {
                             filter = option; folderID = nil; tag = ""; category = ""
+                            if option == .deleted { source = ""; recentOnly = false }
                             model.selectedID = nil
                         }
                     }
@@ -201,6 +214,8 @@ struct LibraryView: View {
                     }
                 }.padding(.top, 16)
             }
+            if let id = model.lastDeletedID { Button("Undo delete") { model.restore(id) }.font(.caption).padding(10) }
+            if let notice = model.notice { Text(notice).font(.caption2).foregroundStyle(.secondary).padding(8) }
             Divider()
             Menu {
                 ForEach(LibraryExportFormat.allCases) { format in
@@ -218,7 +233,7 @@ struct LibraryView: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: icon).frame(width: 18).foregroundStyle(selected ? Brand.lavender : Color.secondary)
-                Text(title).lineLimit(1)
+                Text(title).lineLimit(1).minimumScaleFactor(0.85)
                 Spacer(minLength: 0)
             }.font(.system(size: 12)).padding(.horizontal, 10).padding(.vertical, 8)
                 .background(selected ? Brand.lavender.opacity(0.14) : .clear)
@@ -260,11 +275,11 @@ struct LibraryView: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             BookmarkMark().fill(Brand.lavender).frame(width: 28, height: 38)
-            Text(model.items.isEmpty ? "A place for things worth keeping." : "Return to something useful.")
+            Text(filter == .deleted ? "Recently Deleted" : model.items.isEmpty ? "A place for things worth keeping." : "Return to something useful.")
                 .font(.system(size: 22, weight: .regular, design: .serif))
-            Text(model.items.isEmpty ? "Paste a link or a passage. Your library stays on this Mac." : "Choose an item from your library.")
+            Text(filter == .deleted ? "Deleted items can be restored for 30 days." : model.items.isEmpty ? "Paste a link or a passage. Your library stays on this Mac." : "Choose an item from your library.")
                 .font(.callout).foregroundStyle(.secondary)
-            if model.items.isEmpty {
+            if model.items.isEmpty && filter != .deleted {
                 Button("Save something") { model.showCapture = true }
                     .buttonStyle(.borderedProminent).tint(.primary).disabled(!model.isAvailable)
                 Text("Automatic capture is \(model.captureEnabled ? "on" : "off").")

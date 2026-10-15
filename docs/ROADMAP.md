@@ -1,28 +1,33 @@
 # MVP and release boundaries
 
-This is the first executable Mac implementation of Capture → Find → Read →
-Highlight → Reuse. It provides a usable development foundation, not a finished
-commercial release.
+Still has a working private development preview. It is not yet a notarized public
+beta. The dated evidence and outstanding checks are in QA.md.
 
-Before public beta:
-- Validate on real Mac hardware and resolve manual QA findings.
-- Replace basic HTML extraction with a vetted reader and fixture tests.
-- Benchmark library sizes, paginate results and move SQLite work off the UI actor.
-- Add fuller capture history, recovery UI and safer deletion/undo.
-- Add a configurable global capture shortcut if platform testing supports it.
-- Build an original icon/artwork system with supplied user assets.
-- Add accessibility testing and improve reading typography/settings.
+## Implemented in the private preview
 
-Before App Store release:
-- Xcode application project, signing identities and final bundle identifier.
-- App Sandbox validation, supported clipboard behavior and network entitlements.
-- Distribution signing, privacy disclosures and submission metadata.
-- Archive migration/backups and sustained beta evidence.
+Manual text/link capture; optional paused-by-default clipboard capture; local SQLite
+storage and search; basic offline article snapshots; highlights and dated comments;
+folders, tags and categories; reading preferences; recoverable deletion and Undo;
+JSON backup/merge import and readable exports; lavender flag app identity.
 
-Next major release:
-- Optional iCloud/CloudKit sync with tested conflicts, account changes, deletion
-  propagation and offline recovery. Stable IDs already exist; sync is not implemented.
-- More original clipboard representations and image/PDF support.
-- Reading time estimates and a calm statistics view.
+## Required before normal public distribution
 
-No fabricated delivery dates, capacity claims or editorial-selection guarantees.
+- Complete ordinary-user capture exclusion checks and accessibility/manual QA.
+- Obtain Developer ID signing and notarization; verify the final downloaded package
+  on a clean Mac with Gatekeeper enabled, using docs/RELEASE.md.
+- Record remaining limitations accurately in the tester guide and release notes.
+
+## Subsequent reliability and product work
+
+Improve article extraction with representative fixtures. Benchmark larger libraries,
+then paginate and move database work off the UI actor before making capacity claims.
+Evaluate a global capture shortcut with platform testing. These features are not
+promised by the private preview.
+
+## Later releases
+
+Optional sync requires tested conflicts, account changes, deletion propagation and
+offline recovery. Images/PDFs, OCR and reading statistics remain deferred. App Store
+distribution additionally requires sandbox validation and submission preparation.
+
+No fabricated delivery dates or capacity claims.

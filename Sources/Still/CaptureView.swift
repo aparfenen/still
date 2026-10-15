@@ -4,8 +4,8 @@ import AppKit
 struct CaptureView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    @State private var text = ""
-    @State private var title = ""
+    @ViewState private var text = ""
+    @ViewState private var title = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

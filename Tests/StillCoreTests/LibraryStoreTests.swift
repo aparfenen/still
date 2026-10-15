@@ -1,6 +1,9 @@
+import Foundation
+#if !STILL_STANDALONE
 import XCTest
+#endif
 import CSQLite
-@testable import StillCore
+import StillCore
 
 final class LibraryStoreTests: XCTestCase {
     private var directory: URL!
@@ -86,9 +89,36 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertTrue(try store.all().isEmpty)
     }
 
+    func testMalformedAnnotationImportRollsBackItemsAndFolders() throws {
+        let folder = LibraryFolder(name: "Imported folder")
+        let valid = LibraryItem(text: "Valid preceding item", manual: true)
+        for invalidNote in [
+            Annotation(quote: "Invalid", range: NSRange(location: -1, length: 7)),
+            Annotation(quote: "Invalid", range: NSRange(location: 0, length: 0)),
+            Annotation(quote: "", range: NSRange(location: 0, length: 1))
+        ] {
+            var invalid = LibraryItem(text: "Invalid annotation", manual: true)
+            invalid.annotations = [invalidNote]
+            let archive = LibraryArchive(items: [valid, invalid], folders: [folder])
+            XCTAssertThrowsError(try store.importData(JSONEncoder().encode(archive)))
+            XCTAssertTrue(try store.all(includeDeleted: true).isEmpty)
+            XCTAssertTrue(try store.folders().isEmpty)
+        }
+    }
+
+    func testDuplicateArchiveRecordsAreRejectedWithoutMutation() throws {
+        let item = try store.capture(text: "Existing item", manual: true)
+        var sameOriginal = item
+        sameOriginal.id = UUID()
+        for records in [[item, item], [item, sameOriginal]] {
+            XCTAssertThrowsError(try store.importData(JSONEncoder().encode(LibraryArchive(items: records))))
+            XCTAssertEqual(try store.all(), [item])
+        }
+    }
+
     func testUnknownArchiveVersionIsRejected() throws {
         var archive = LibraryArchive(items: [LibraryItem(text: "Future", manual: true)])
-        archive.version = 3
+        archive.version = 99
         XCTAssertThrowsError(try store.importData(JSONEncoder().encode(archive)))
         XCTAssertTrue(try store.all().isEmpty)
     }
@@ -195,4 +225,40 @@ final class LibraryStoreTests: XCTestCase {
         }
     }
 
+    func testRecentlyDeletedAndUndoPreserveAnnotationsAndOrganization() throws {
+        let folder = LibraryFolder(name: "Research")
+        try store.saveFolder(folder)
+        var item = try store.capture(text: "A passage with notes", manual: true)
+        item.folderID = folder.id; item.tags = ["science"]
+        item.annotations = [Annotation(quote: "passage", range: NSRange(location: 2, length: 7), comment: "Keep this context")]
+        try store.save(item); try store.delete(id: item.id)
+        XCTAssertTrue(try store.all().isEmpty)
+        XCTAssertEqual(try store.all(includeDeleted: true).count, 1)
+        try store.restore(id: item.id)
+        let restored = try XCTUnwrap(store.all().first)
+        XCTAssertEqual(restored.annotations, item.annotations)
+        XCTAssertEqual(restored.folderID, folder.id); XCTAssertEqual(restored.tags, ["science"])
+        XCTAssertTrue(restored.isKept); XCTAssertNil(restored.deletedAt)
+    }
+    func testDeletedBackupRoundTripAndThirtyDayPurge() throws {
+        var item = try store.capture(text: "A recoverable note", manual: true)
+        item.deletedAt = Date(); try store.save(item)
+        let archive = try store.exportData()
+        let copy = try LibraryStore(url: directory.appendingPathComponent("restored.sqlite"))
+        try copy.importData(archive)
+        XCTAssertEqual(try copy.all(includeDeleted: true), [item])
+        XCTAssertTrue(try copy.all().isEmpty)
+        try copy.prune(retentionDays: 7, now: item.deletedAt!.addingTimeInterval(29 * 86400))
+        XCTAssertEqual(try copy.all(includeDeleted: true).count, 1)
+        try copy.prune(retentionDays: 7, now: item.deletedAt!.addingTimeInterval(31 * 86400))
+        XCTAssertTrue(try copy.all(includeDeleted: true).isEmpty)
+    }
+    func testAutomaticRecaptureDoesNotRestoreTrash() throws {
+        let item = try store.capture(text: "Deleted original", manual: true)
+        try store.delete(id: item.id)
+        _ = try store.capture(text: item.original, manual: false)
+        XCTAssertTrue(try store.all().isEmpty)
+        _ = try store.capture(text: item.original, manual: true)
+        XCTAssertEqual(try store.all().count, 1)
+    }
 }
